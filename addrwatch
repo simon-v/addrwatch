@@ -1,0 +1,87 @@
+#!/usr/bin/env python2
+import json, urllib, os, sys
+
+url = 'https://api.blockchair.com/bitcoin-cash/dashboards/address/%s'
+currency_url = 'http://api.fixer.io/latest?base=USD&symbols=%s'
+
+# Read configuration file
+try:
+	f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'r')
+	user_cfg = True
+except:
+	try:
+		f = open('addrwatch.cfg', 'r')
+		user_cfg = False
+	except:
+		print(sys.exc_info()[1])
+		print('''Could not open the configuration file.
+Please copy addrwatch.cfg.sample to addrwatch.cfg or $HOME/.addrwatch.cfg and edit it to your liking.''')
+		sys.exit(1)
+lines = f.readlines()
+f.close()
+
+# Parse config file
+config = {}
+addresses = []
+for line in lines:
+	# Skip blank lines and comments
+	if line.strip() == '' or line.startswith('#'):
+		continue
+	# Split to key and value pairs
+	words = line.strip().split('=')
+	key = words[0].strip()
+	value = '='.join(words[1:]).strip()
+	if key == 'address':
+		value = value.split(',')
+		if len(value) == 0:
+			continue
+		elif len(value) == 1:
+			value.append(0)
+		else:
+			try:
+				value[1] = int(value[1])
+			except ValueError:
+				value[1] = 0
+		addresses.append(value)
+	else:
+		config[key] = value
+
+if config['currency'] != '':
+	config['currency'] = config['currency'].upper()
+
+# Pull address balances from block explorer
+for addr in addresses:
+	webpage = urllib.urlopen(url % addr[0])
+	try:
+		data = json.loads(''.join(webpage.readlines()))
+	except ValueError:
+		print(sys.exc_info()[1])
+		sys.exit()
+	webpage.close()
+	# Process address balance
+	balance = int(data['data'][0]['sum_value_unspent'])
+	rate = float(data['data'][0]['rate'])
+	if config['currency'] == '':
+		rate = 1
+	elif config['currency'] != 'USD':
+		webpage = urllib.urlopen(currency_url % config['currency'])
+		data = json.loads(''.join(webpage.readlines()))
+		webpage.close()
+		rate = rate * data['rates'][config['currency']]
+	# Calculate balance change
+	if balance != addr[1]:
+		diff = balance - addr[1]
+		if diff > 0:
+			print('Payment received: %s %s to address %s' % (diff * rate / 100000000.0, config['currency'], addr[0]))
+		elif diff < 0:
+			print('Payment sent: %s %s from address %s' % (diff * rate / 100000000.0, config['currency'], addr[0]))
+	# Update balances in the config file
+	for line in lines:
+		if line.startswith('address=%s' % addr[0]):
+			lines[lines.index(line)] = 'address=%s,%s\n' % (addr[0], balance)
+	if user_cfg:
+		f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'w')
+	else:
+		f = open('addrwatch.cfg', 'w')
+	f.writelines(lines)
+	f.close()
