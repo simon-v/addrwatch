@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-import json, urllib, os, sys, time
+import json, urllib, os, sys, subprocess, time
 
 #url = 'https://api.blockchair.com/bitcoin-cash/dashboards/address/%s'
 url = 'https://cashexplorer.bitcoin.com/insight-api/addr/%s'
@@ -59,6 +59,14 @@ try:
 except:
 	print('Invalid or missing frequency setting, using defaults')
 	config['frequency'] = 60
+try:
+	config['notification'] = config['notification'].lower()
+	if config['notification'] == 'yes':
+		config['notification'] = True
+	else:
+		config['notification'] = False
+except:
+	config['notification'] = False
 
 # Pull address balances from block explorer
 while True:
@@ -98,9 +106,15 @@ while True:
 		if balance != addr[1]:
 			diff = balance - addr[1]
 			if diff > 0:
-				print('Payment received: %s %s to address %s' % (diff * rate, config['currency'], addr[0]))
+				report = 'Payment received: %s %s to address %s' % (diff * rate, config['currency'], addr[0])
+				if config['notification']:
+					subprocess.call(['notify-send', report])
+				print(report)
 			elif diff < 0:
-				print('Payment sent: %s %s from address %s' % (diff * rate, config['currency'], addr[0]))
+				report = 'Payment sent: %s %s from address %s' % (diff * rate, config['currency'], addr[0])
+				if config['notification']:
+					subprocess.call(['notify-send', report])
+				print(report)
 		# Update balances in the config file
 		for line in lines:
 			if line.startswith('address=%s' % addr[0]):
