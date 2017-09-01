@@ -1,7 +1,9 @@
 #!/usr/bin/env python2
-import json, urllib, os, sys
+import json, urllib, os, sys, time
 
-url = 'https://api.blockchair.com/bitcoin-cash/dashboards/address/%s'
+#url = 'https://api.blockchair.com/bitcoin-cash/dashboards/address/%s'
+url = 'https://cashexplorer.bitcoin.com/insight-api/addr/%s'
+price_url = 'https://api.coinmarketcap.com/v1/ticker/bitcoin-cash/'
 currency_url = 'http://api.fixer.io/latest?base=USD&symbols=%s'
 
 # Read configuration file
@@ -39,49 +41,74 @@ for line in lines:
 			value.append(0)
 		else:
 			try:
-				value[1] = int(value[1])
+				value[1] = float(value[1])
 			except ValueError:
 				value[1] = 0
 		addresses.append(value)
 	else:
 		config[key] = value
 
-if config['currency'] != '':
+try:
 	config['currency'] = config['currency'].upper()
+except:
+	config['currency'] = ''
+try:
+	config['frequency'] = int(config['frequency'])
+	if config['frequency'] < 1:
+		raise ValueError
+except:
+	print('Invalid or missing frequency setting, using defaults')
+	config['frequency'] = 60
 
 # Pull address balances from block explorer
-for addr in addresses:
-	webpage = urllib.urlopen(url % addr[0])
-	try:
-		data = json.loads(''.join(webpage.readlines()))
-	except ValueError:
-		print(sys.exc_info()[1])
-		sys.exit()
-	webpage.close()
-	# Process address balance
-	balance = int(data['data'][0]['sum_value_unspent'])
-	rate = float(data['data'][0]['rate'])
-	if config['currency'] == '':
-		rate = 1
-	elif config['currency'] != 'USD':
-		webpage = urllib.urlopen(currency_url % config['currency'])
-		data = json.loads(''.join(webpage.readlines()))
+while True:
+	for addr in addresses:
+		webpage = urllib.urlopen(url % addr[0])
+		try:
+			data = json.loads(''.join(webpage.readlines()))
+		except ValueError:
+			print(sys.exc_info()[1])
+			sys.exit()
 		webpage.close()
-		rate = rate * data['rates'][config['currency']]
-	# Calculate balance change
-	if balance != addr[1]:
-		diff = balance - addr[1]
-		if diff > 0:
-			print('Payment received: %s %s to address %s' % (diff * rate / 100000000.0, config['currency'], addr[0]))
-		elif diff < 0:
-			print('Payment sent: %s %s from address %s' % (diff * rate / 100000000.0, config['currency'], addr[0]))
-	# Update balances in the config file
-	for line in lines:
-		if line.startswith('address=%s' % addr[0]):
-			lines[lines.index(line)] = 'address=%s,%s\n' % (addr[0], balance)
-	if user_cfg:
-		f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'w')
-	else:
-		f = open('addrwatch.cfg', 'w')
-	f.writelines(lines)
-	f.close()
+		# Process address balance
+		#balance = int(data['data'][0]['sum_value_unspent'])
+		balance = data['balance']
+		unconfirmed = data['unconfirmedBalance']
+		#rate = float(data['data'][0]['rate'])
+		if config['currency'] == '':
+			rate = 1
+		else:
+			webpage = urllib.urlopen(price_url)
+			try:
+				data.json.loads(''.join(webpage.readlines()))
+			except ValueError:
+				print(sys.exc_info()[1])
+			webpage.close()
+			rate = data['price_usd']
+			if config['currency'] != 'USD':
+				webpage = urllib.urlopen(currency_url % config['currency'])
+				try:
+					data = json.loads(''.join(webpage.readlines()))
+				except ValueError:
+					print(sys.exc_info()[1])
+				webpage.close()
+				rate = rate * data['rates'][config['currency']]
+		# Calculate balance change
+		#total = balance + unconfirmed
+		if balance != addr[1]:
+			diff = balance - addr[1]
+			if diff > 0:
+				print('Payment received: %s %s to address %s' % (diff * rate, config['currency'], addr[0]))
+			elif diff < 0:
+				print('Payment sent: %s %s from address %s' % (diff * rate, config['currency'], addr[0]))
+		# Update balances in the config file
+		for line in lines:
+			if line.startswith('address=%s' % addr[0]):
+				lines[lines.index(line)] = 'address=%s,%s\n' % (addr[0], balance)
+		if user_cfg:
+			f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'w')
+		else:
+			f = open('addrwatch.cfg', 'w')
+		f.writelines(lines)
+		f.close()
+	time.sleep(config['frequency'])
