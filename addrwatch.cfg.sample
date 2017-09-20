@@ -1,4 +1,6 @@
 # addrwatch configuration file
+# Copy this file to either $HOME/.addrwatch.cfg or to ./addrwatch.cfg and edit
+# to your own preferences
 
 # Block explorer poll frequency in seconds
 frequency=60
