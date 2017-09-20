@@ -48,6 +48,7 @@ for line in lines:
 	else:
 		config[key] = value
 
+# Sanitize configuration
 try:
 	config['currency'] = config['currency'].upper()
 except:
@@ -60,20 +61,20 @@ except:
 	print('Invalid or missing frequency setting, using defaults')
 	config['frequency'] = 60
 try:
-	config['notification'] = config['notification'].lower()
-	if config['notification'] == 'yes':
+	if config['notification'].lower() == 'yes':
 		config['notification'] = True
 	else:
 		raise ValueError
 except:
 	config['notification'] = False
 try:
-	if config['unconfirmed'] == 'yes':
+	if config['unconfirmed'].lower() == 'yes':
 		config['unconfirmed'] = True
 	else:
 		raise ValueError
 except:
 	config['unconfirmed'] = False
+
 # Pull address balances from block explorer
 while True:
 	for addr in addresses:
@@ -110,18 +111,18 @@ while True:
 		# Calculate balance change
 		if config['unconfirmed']:
 			balance += unconfirmed
+		report = ''
 		if balance != addr[1]:
 			diff = balance - addr[1]
 			if diff > 0:
 				report = 'Payment received: %s %s to address %s' % (diff * rate, config['currency'], addr[0])
-				if config['notification']:
-					subprocess.call(['notify-send', report])
-				print(report)
 			elif diff < 0:
 				report = 'Payment sent: %s %s from address %s' % (diff * rate, config['currency'], addr[0])
-				if config['notification']:
-					subprocess.call(['notify-send', report])
-				print(report)
+		# Report balance change
+		if report != '':
+			if config['notification'] and 'DISPLAY' in os.environ:
+				subprocess.call(['notify-send', report])
+			print(report)
 		# Update balances in the config file
 		for line in lines:
 			if line.startswith('address=%s' % addr[0]):
