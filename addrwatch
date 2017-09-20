@@ -135,4 +135,7 @@ while True:
 		f.close()
 	if config['frequency'] == 0:
 		sys.exit()
-	time.sleep(config['frequency'])
+	try:
+		time.sleep(config['frequency'])
+	except KeyboardInterrupt:
+		sys.exit()
