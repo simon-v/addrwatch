@@ -3,6 +3,7 @@
 # to your own preferences
 
 # Block explorer poll frequency in seconds
+# Set to 0 to have addrwatch quit immediately after a single check
 frequency=60
 
 # Set to 'yes' to push a desktop notification on balance change
@@ -27,8 +28,8 @@ email=
 # Leave blank to display the raw bitcoin amounts
 currency=
 
-# List of watched bitcoin addresses, followed by the balance in satoshi
-# addrwatch will update the current balance on its own on subsequent executions
+# List of watched bitcoin addresses, followed by the last known balance
+# addrwatch will update the balance on its own on subsequent executions
 #address=1ADDReSs00000000000000000000000000,0
 #address=1ADDReSs11111111111111111111111111,0
 #address=1ADDReSs22222222222222222222222222,0

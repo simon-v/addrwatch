@@ -55,7 +55,7 @@ except:
 	config['currency'] = ''
 try:
 	config['frequency'] = int(config['frequency'])
-	if config['frequency'] < 1:
+	if config['frequency'] < 0:
 		raise ValueError
 except:
 	print('Invalid or missing frequency setting, using defaults')
@@ -133,4 +133,6 @@ while True:
 			f = open('addrwatch.cfg', 'w')
 		f.writelines(lines)
 		f.close()
+	if config['frequency'] == 0:
+		sys.exit()
 	time.sleep(config['frequency'])
