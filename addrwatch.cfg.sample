@@ -7,6 +7,10 @@ frequency=60
 # Set to 'no' to echo the amounts to the terminal instead
 notification=no
 
+# Set to 'yes' to count unconfirmed balances as well as confirmed
+# Set to 'no' to only count confirmed balances
+unconfirmed=no
+
 # Set to your receiving address to have emails sent to you on change
 # Leave blank to disable
 email=

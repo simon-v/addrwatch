@@ -64,10 +64,16 @@ try:
 	if config['notification'] == 'yes':
 		config['notification'] = True
 	else:
-		config['notification'] = False
+		raise ValueError
 except:
 	config['notification'] = False
-
+try:
+	if config['unconfirmed'] == 'yes':
+		config['unconfirmed'] = True
+	else:
+		raise ValueError
+except:
+	config['unconfirmed'] = False
 # Pull address balances from block explorer
 while True:
 	for addr in addresses:
@@ -102,7 +108,8 @@ while True:
 				webpage.close()
 				rate = rate * data['rates'][config['currency']]
 		# Calculate balance change
-		#total = balance + unconfirmed
+		if config['unconfirmed']:
+			balance += unconfirmed
 		if balance != addr[1]:
 			diff = balance - addr[1]
 			if diff > 0:
