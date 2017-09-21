@@ -13,6 +13,15 @@ price_url = 'https://api.coinmarketcap.com/v1/ticker/bitcoin-cash/'
 currency_url = 'http://api.fixer.io/latest?base=USD&symbols=%s'
 email_from = 'addrwatch <noreply@localhost.localdomain>'
 
+text_body = [
+	'Total address balance: %s',
+	'Total address balance (%s): %s',
+	'Unconfirmed balance: %s',
+	'Unconfirmed balance (%s): %s',
+	'Confirmed balance: %s',
+	'Confirmed balance (%s): %s'
+]
+
 # Read configuration file
 try:
 	f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'r')
@@ -88,6 +97,12 @@ for setting in ['server', 'login', 'passwd']:
 	if setting not in config or config[setting] == '':
 		use_smtp = False
 
+# float amount -> str formatted amount
+def btc(amount):
+	return ('%.8f' % amount).rstrip('0')
+def fiat(amount):
+	return ('%.2f' % amount).rstrip('0')
+
 # Pull address balances from block explorer
 while True:
 	for addr in addresses.keys():
@@ -108,11 +123,11 @@ while True:
 		else:
 			webpage = urllib.urlopen(price_url)
 			try:
-				data.json.loads(''.join(webpage.readlines()))
+				data = json.loads(''.join(webpage.readlines()))
 			except ValueError:
 				print(sys.exc_info()[1])
 			webpage.close()
-			rate = data['price_usd']
+			rate = float(data[0]['price_usd'])
 			if config['currency'] != 'USD':
 				webpage = urllib.urlopen(currency_url % config['currency'])
 				try:
@@ -126,12 +141,14 @@ while True:
 			balance += unconfirmed
 		report = ''
 		if balance != addresses[addr]:
-			diff = balance - addresses[addr]
-			diffrep = ('%.8f' % diff * rate).rstrip('0')
+			if config['currency'] != '':
+				diff = fiat((balance - addresses[addr]) * rate)
+			else:
+				diff = btc(balance - addresses[addr])
 			if diff > 0:
-				report = 'Payment received: %s %s to address %s' % (diffrep, config['currency'], addr)
+				report = 'Payment received: %s %s to address %s' % (diff, config['currency'], addr)
 			elif diff < 0:
-				report = 'Payment sent: %s %s from address %s' % (diffrep, config['currency'], addr)
+				report = 'Payment sent: %s %s from address %s' % (diff, config['currency'], addr)
 		# Report balance change
 		if report != '':
 			# Desktop notification
@@ -139,7 +156,20 @@ while True:
 				subprocess.call(['notify-send', report])
 			# Email message
 			if config['email'] != '':
-				message = MIMEText('')
+				# Format the message body
+				text_body[0] = text_body[0] % btc(balance)
+				text_body[2] = text_body[2] % btc(unconfirmed)
+				text_body[4] = text_body[4] % btc(balance - unconfirmed)
+				if config['currency'] == '':
+					del(text_body[5])
+					del(text_body[3])
+					del(text_body[1])
+				else:
+					text_body[1] = text_body[1] % (config['currency'], fiat(balance * rate))
+					text_body[3] = text_body[3] % (config['currency'], fiat(unconfirmed * rate))
+					text_body[5] = text_body[5] % (config['currency'], fiat((balance - unconfirmed) * rate))
+				message = MIMEText('\n'.join(text_body))
+				# Add headers
 				message['From'] = email_from
 				message['To'] = config['email']
 				message['Subject'] = report
@@ -163,7 +193,7 @@ while True:
 		addresses[addr] = balance
 		for line in lines:
 			if line.startswith('address=%s' % addr):
-				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, ('%.8f' % balance).rstrip('0'))
+				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, btc(balance))
 				break
 	# Write updates to the config file
 	if user_cfg:
