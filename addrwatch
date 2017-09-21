@@ -95,6 +95,8 @@ use_smtp = True
 for setting in ['server', 'login', 'passwd']:
 	if setting not in config or config[setting] == '':
 		use_smtp = False
+if 'email_from' not in config.keys() or config['email_from'] == '':
+	config['email_from'] = email_from
 
 # float amount -> str formatted amount
 def btc(amount):
@@ -186,7 +188,7 @@ while True:
 					text_body[5] = text_body[5] % (config['currency'], fiat((balance - unconfirmed) * rate))
 				message = MIMEText('\n'.join(text_body))
 				# Add headers
-				message['From'] = email_from
+				message['From'] = config['email_from']
 				message['To'] = config['email']
 				message['Subject'] = report
 				message['Auto-Submitted'] = 'auto-generated'

@@ -24,6 +24,9 @@ email=
 #login=LOGIN
 #passwd=PASSWORD
 
+# This string will appear in the From header of sent emails
+#email_from=addrwatch <noreply@localhost.localdomain>
+
 # Set to any ISO 4217 currency symbol to have amounts cast into that currency
 # Leave blank to display the raw bitcoin amounts
 currency=
