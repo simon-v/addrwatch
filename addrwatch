@@ -31,7 +31,7 @@ f.close()
 
 # Parse config file
 config = {}
-addresses = []
+addresses = {}
 for line in lines:
 	# Skip blank lines and comments
 	if line.strip() == '' or line.startswith('#'):
@@ -51,7 +51,7 @@ for line in lines:
 				value[1] = float(value[1])
 			except ValueError:
 				value[1] = 0
-		addresses.append(value)
+		addresses[value[0]] = value[1]
 	else:
 		config[key] = value
 
@@ -90,8 +90,8 @@ for setting in ['server', 'login', 'passwd']:
 
 # Pull address balances from block explorer
 while True:
-	for addr in addresses:
-		webpage = urllib.urlopen(url % addr[0])
+	for addr in addresses.keys():
+		webpage = urllib.urlopen(url % addr)
 		try:
 			data = json.loads(''.join(webpage.readlines()))
 		except ValueError:
@@ -125,13 +125,13 @@ while True:
 		if config['unconfirmed']:
 			balance += unconfirmed
 		report = ''
-		if balance != addr[1]:
-			diff = balance - addr[1]
+		if balance != addresses[addr]:
+			diff = balance - addresses[addr]
 			diffrep = ('%.8f' % diff * rate).rstrip('0')
 			if diff > 0:
-				report = 'Payment received: %s %s to address %s' % (diffrep, config['currency'], addr[0])
+				report = 'Payment received: %s %s to address %s' % (diffrep, config['currency'], addr)
 			elif diff < 0:
-				report = 'Payment sent: %s %s from address %s' % (diffrep, config['currency'], addr[0])
+				report = 'Payment sent: %s %s from address %s' % (diffrep, config['currency'], addr)
 		# Report balance change
 		if report != '':
 			# Desktop notification
@@ -160,9 +160,10 @@ while True:
 						print('Sendmail failed: %s' % sys.exc_info()[1])
 			print(report)
 		# Update balances in the config file
+		addresses[addr] = balance
 		for line in lines:
-			if line.startswith('address=%s' % addr[0]):
-				lines[lines.index(line)] = 'address=%s,%s\n' % (addr[0], ('%.8f' % balance).rstrip('0'))
+			if line.startswith('address=%s' % addr):
+				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, ('%.8f' % balance).rstrip('0'))
 		if user_cfg:
 			f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'w')
 		else:
