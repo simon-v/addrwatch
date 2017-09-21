@@ -7,8 +7,7 @@ try:
 except ImportError:
         from email.MIMEText import MIMEText  # Python 2.4
 
-#url = 'https://api.blockchair.com/bitcoin-cash/dashboards/address/%s'
-url = 'https://cashexplorer.bitcoin.com/insight-api/addr/%s'
+block_url = 'https://cashexplorer.bitcoin.com/insight-api/addr/%s'
 price_url = 'https://api.coinmarketcap.com/v1/ticker/bitcoin-cash/'
 currency_url = 'http://api.fixer.io/latest?base=USD&symbols=%s'
 email_from = 'addrwatch <noreply@localhost.localdomain>'
@@ -103,38 +102,55 @@ def btc(amount):
 def fiat(amount):
 	return ('%.2f' % amount).rstrip('0')
 
-# Pull address balances from block explorer
+# str URL -> str JSON data from the URL
+def jsonload(url):
+	webpage = urllib.urlopen(url)
+	data = json.loads(''.join(webpage.readlines()))
+	webpage.close()
+	return data
+
 while True:
-	for addr in addresses.keys():
-		webpage = urllib.urlopen(url % addr)
+	# Delay after the first pass
+	try:
+		data
+	except NameError:
+		pass
+	else:
 		try:
-			data = json.loads(''.join(webpage.readlines()))
-		except ValueError:
-			print(sys.exc_info()[1])
+			time.sleep(config['frequency'])
+		except KeyboardInterrupt:
 			sys.exit()
-		webpage.close()
+	# Pull address balances from block explorer
+	for addr in addresses.keys():
+		try:
+			data = jsonload(block_url % addr)
+		except KeyboardInterrupt:
+			sys.exit()
+		except:
+			print('Could not load address balance: %s' % sys.exc_info()[1])
+			continue
 		# Process address balance
-		#balance = int(data['data'][0]['sum_value_unspent'])
 		balance = data['balance']
 		unconfirmed = data['unconfirmedBalance']
-		#rate = float(data['data'][0]['rate'])
 		if config['currency'] == '':
 			rate = 1
 		else:
-			webpage = urllib.urlopen(price_url)
 			try:
-				data = json.loads(''.join(webpage.readlines()))
-			except ValueError:
-				print(sys.exc_info()[1])
-			webpage.close()
+				data = jsonload(price_url)
+			except KeyboardInterrupt:
+				sys.exit()
+			except:
+				print('Could not load conversion rate: %s' % sys.exc_info()[1])
+				continue
 			rate = float(data[0]['price_usd'])
 			if config['currency'] != 'USD':
-				webpage = urllib.urlopen(currency_url % config['currency'])
 				try:
-					data = json.loads(''.join(webpage.readlines()))
-				except ValueError:
-					print(sys.exc_info()[1])
-				webpage.close()
+					data = jsonload(currency_url % config['currency'])
+				except KeyboardInterrupt:
+					sys.exit()
+				except:
+					print('Could not load conversion rate: %s' % sys.exc_info()[1])
+					continue
 				rate = rate * data['rates'][config['currency']]
 		# Calculate balance change
 		if config['unconfirmed']:
@@ -180,6 +196,8 @@ while True:
 						server.login(config['login'], config['passwd'])
 						server.sendmail(message['From'], message['To'], message.as_string())
 						server.quit()
+					except KeyboardInterrupt:
+						sys.exit()
 					except:
 						print('SMTP failed: %s' % sys.exc_info()[1])
 				else:
@@ -203,8 +221,4 @@ while True:
 	f.writelines(lines)
 	f.close()
 	if config['frequency'] == 0:
-		sys.exit()
-	try:
-		time.sleep(config['frequency'])
-	except KeyboardInterrupt:
 		sys.exit()
