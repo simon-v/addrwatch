@@ -159,17 +159,19 @@ while True:
 					except:
 						print('Sendmail failed: %s' % sys.exc_info()[1])
 			print(report)
-		# Update balances in the config file
+		# Update balances
 		addresses[addr] = balance
 		for line in lines:
 			if line.startswith('address=%s' % addr):
 				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, ('%.8f' % balance).rstrip('0'))
-		if user_cfg:
-			f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'w')
-		else:
-			f = open('addrwatch.cfg', 'w')
-		f.writelines(lines)
-		f.close()
+				break
+	# Write updates to the config file
+	if user_cfg:
+		f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'w')
+	else:
+		f = open('addrwatch.cfg', 'w')
+	f.writelines(lines)
+	f.close()
 	if config['frequency'] == 0:
 		sys.exit()
 	try:
