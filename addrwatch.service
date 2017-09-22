@@ -1,0 +1,26 @@
+# addrwatch systemctl unit file
+#
+# To use as a system unit:
+# 1. Place this file in /etc/systemd/system/
+# 2. Edit "WorkingDirectory=" to point to where addrwatch.cfg is located
+#
+# To use as a user unit:
+# 1. Place this file in $HOME/.config/systemd/user/
+# 2. Edit "WorkingDirectory=" to point to where addrwatch.cfg is located
+# --OR--
+# 2. Comment "WorkingDirectory=" out entirely and name the config file ".addrwatch.cfg"
+#
+# Once you are done, run "systemctl daemon-reload", "systemctl enable" and
+# "systemctl start" as usual.
+
+[Unit]
+Description=Bitcoin Cash Address Watch
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/PATH/TO/addrwatch
+WorkingDirectory=/PATH/TO/
+
+[Install]
+WantedBy=multi-user.target
