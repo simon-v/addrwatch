@@ -105,9 +105,12 @@ if 'email_from' not in config.keys() or config['email_from'] == '':
 
 # float amount -> str formatted amount
 def btc(amount):
-	return ('%.8f' % amount).rstrip('0')
+	result = ('%.8f' % amount).rstrip('0.')
+	if result == '':
+		return '0'
+	return result
 def fiat(amount):
-	return ('%.2f' % amount).rstrip('0')
+	return ('%.2f' % amount)
 
 # str URL -> str JSON data from the URL
 def jsonload(url):
