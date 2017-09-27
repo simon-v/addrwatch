@@ -12,6 +12,9 @@ try:
 except ImportError:
         from email.MIMEText import MIMEText  # Python 2.4
 
+usage = '''Usage: addrwatch [CONFIG_FILE]
+See the README file for more information.'''
+
 block_url = 'https://cashexplorer.bitcoin.com/insight-api/addr/%s'
 price_url = 'https://api.coinmarketcap.com/v1/ticker/bitcoin-cash/'
 currency_url = 'http://api.fixer.io/latest?base=USD&symbols=%s'
@@ -28,18 +31,31 @@ text_body = [
 ]
 
 # Read configuration file
-try:
-	f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'r')
-	user_cfg = True
-except:
+if len(sys.argv) > 1:
+	if sys.argv[1] == '-h' or sys.argv[1] == '--help':
+		print(usage)
+		sys.exit(0)
 	try:
-		f = open('addrwatch.cfg', 'r')
-		user_cfg = False
+		cfg_file = None
+		f = open(sys.argv[1], 'r')
+		cfg_file = sys.argv[1]
 	except:
 		print(sys.exc_info()[1])
-		print('''Could not open the configuration file.
-Please copy addrwatch.cfg.sample to addrwatch.cfg or $HOME/.addrwatch.cfg and edit it to your liking.''')
 		sys.exit(1)
+	else:
+		try:
+			f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'r')
+			user_cfg = True
+		except:
+			try:
+				f = open('addrwatch.cfg', 'r')
+				user_cfg = False
+			except:
+				print(sys.exc_info()[1])
+				print('''Could not open the configuration file.
+Please copy addrwatch.cfg.sample to addrwatch.cfg or $HOME/.addrwatch.cfg and
+edit it to your liking, or run addrwatch with a file name as the only argument.''')
+				sys.exit(1)
 lines = f.readlines()
 f.close()
 
@@ -136,7 +152,6 @@ while True:
 	if config['currency'] == '':
 		rate = 1
 	elif loop_time >= rate_cache_time:
-		print('DEBUG: updating currency rate')
 		try:
 			data = jsonload(price_url)
 		except KeyboardInterrupt:
@@ -228,11 +243,13 @@ while True:
 				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, btc(balance))
 				break
 	# Write updates to the config file
-	if user_cfg:
+	if cfg_file is not None:
+		f = open(cfg_file, 'w')
+	elif user_cfg:
 		f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'w')
 	else:
 		f = open('addrwatch.cfg', 'w')
 	f.writelines(lines)
 	f.close()
 	if config['frequency'] == 0:
-		sys.exit()
+		sys.exit(0)
