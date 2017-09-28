@@ -30,32 +30,35 @@ text_body = [
 	'Confirmed balance (%s): %s'
 ]
 
-# Read configuration file
+# Look for a configuration file
+config_file_locations = [
+	os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'),
+	os.path.join(sys.path[0], 'addrwatch.cfg'),
+	'addrwatch.cfg'
+]
 if len(sys.argv) > 1:
 	if sys.argv[1] == '-h' or sys.argv[1] == '--help':
 		print(usage)
 		sys.exit(0)
-	try:
-		cfg_file = None
-		f = open(sys.argv[1], 'r')
-		cfg_file = sys.argv[1]
-	except:
-		print(sys.exc_info()[1])
-		sys.exit(1)
 	else:
-		try:
-			f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'r')
-			user_cfg = True
-		except:
-			try:
-				f = open('addrwatch.cfg', 'r')
-				user_cfg = False
-			except:
-				print(sys.exc_info()[1])
-				print('''Could not open the configuration file.
+		config_file_locations.insert(0, sys.argv[1])
+# Try to open the configuration file
+cfg_file = None
+for file_name in config_file_locations:
+	try:
+		f = open(file_name, 'r')
+		cfg_file = file_name
+	except:
+		continue
+	else:
+		print('Using %s as config file' % cfg_file)
+		break
+if cfg_file is None:
+	print('''Could not open the configuration file in any of the checked locations.
 Please copy addrwatch.cfg.sample to addrwatch.cfg or $HOME/.addrwatch.cfg and
 edit it to your liking, or run addrwatch with a file name as the only argument.''')
-				sys.exit(1)
+	sys.exit(1)
+# Read the configuration file
 lines = f.readlines()
 f.close()
 
@@ -243,12 +246,7 @@ while True:
 				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, btc(balance))
 				break
 	# Write updates to the config file
-	if cfg_file is not None:
-		f = open(cfg_file, 'w')
-	elif user_cfg:
-		f = open(os.path.join(os.path.expanduser('~'), '.addrwatch.cfg'), 'w')
-	else:
-		f = open('addrwatch.cfg', 'w')
+	f = open(cfg_file, 'w')
 	f.writelines(lines)
 	f.close()
 	if config['frequency'] == 0:
