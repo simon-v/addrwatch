@@ -4,7 +4,7 @@
 # This program is free software, released under the Apache License, Version 2.0. See the LICENSE file for more information
 # Consult the README file for usage instructions and other helpful hints
 
-import json, urllib, os, sys, subprocess, time, email, smtplib
+import os, sys, subprocess, time, email, smtplib
 
 # Some web hosts are not very diligent in keeping up-to-date
 try:
@@ -12,12 +12,11 @@ try:
 except ImportError:
         from email.MIMEText import MIMEText  # Python 2.4
 
+import bch # Local library file
+
 usage = '''Usage: addrwatch [CONFIG_FILE]
 See the README file for more information.'''
 
-block_url = 'https://cashexplorer.bitcoin.com/insight-api/addr/%s'
-price_url = 'https://api.coinmarketcap.com/v1/ticker/bitcoin-cash/'
-currency_url = 'http://api.fixer.io/latest?base=USD&symbols=%s'
 email_from = 'addrwatch <noreply@localhost.localdomain>'
 rate_cache_time = 3600
 
@@ -123,22 +122,6 @@ for setting in ['server', 'login', 'passwd']:
 if 'email_from' not in config.keys() or config['email_from'] == '':
 	config['email_from'] = email_from
 
-# float amount -> str formatted amount
-def btc(amount):
-	result = ('%.8f' % amount).rstrip('0.')
-	if result == '':
-		return '0'
-	return result
-def fiat(amount):
-	return ('%.2f' % amount)
-
-# str URL -> str JSON data from the URL
-def jsonload(url):
-	webpage = urllib.urlopen(url)
-	data = json.loads(''.join(webpage.readlines()))
-	webpage.close()
-	return data
-
 while True:
 	# Delay after the first pass
 	try:
@@ -156,43 +139,31 @@ while True:
 		rate = 1
 	elif loop_time >= rate_cache_time:
 		try:
-			data = jsonload(price_url)
+			rate = bch.get_price(config['currency'])
+			loop_count = 0
 		except KeyboardInterrupt:
 			sys.exit()
 		except:
 			print('Could not load conversion rate: %s' % sys.exc_info()[1])
 			continue
-		rate = float(data[0]['price_usd'])
-		if config['currency'] != 'USD':
-			try:
-				data = jsonload(currency_url % config['currency'])
-			except KeyboardInterrupt:
-				sys.exit()
-			except:
-				print('Could not load conversion rate: %s' % sys.exc_info()[1])
-				continue
-			rate = rate * data['rates'][config['currency']]
-			loop_count = 0
 	# Pull address balances from block explorer
 	for addr in addresses.keys():
 		try:
-			data = jsonload(block_url % addr)
+			balance, unconfirmed = bch.get_balance(addr)
 		except KeyboardInterrupt:
 			sys.exit()
 		except:
 			print('Could not load address balance: %s' % sys.exc_info()[1])
 			continue
-		balance = data['balance']
-		unconfirmed = data['unconfirmedBalance']
 		# Calculate balance change
 		if config['unconfirmed']:
 			balance += unconfirmed
 		report = ''
 		if balance != addresses[addr]:
 			if config['currency'] != '':
-				diff = fiat((balance - addresses[addr]) * rate)
+				diff = bch.fiat((balance - addresses[addr]) * rate)
 			else:
-				diff = btc(balance - addresses[addr])
+				diff = bch.btc(balance - addresses[addr])
 			if diff > 0:
 				report = 'Payment received: %s %s to address %s' % (diff, config['currency'], addr)
 			elif diff < 0:
@@ -205,17 +176,17 @@ while True:
 			# Email message
 			if config['email'] != '':
 				# Format the message body
-				text_body[0] = text_body[0] % btc(balance)
-				text_body[2] = text_body[2] % btc(unconfirmed)
-				text_body[4] = text_body[4] % btc(balance - unconfirmed)
+				text_body[0] = text_body[0] % bch.btc(balance)
+				text_body[2] = text_body[2] % bch.btc(unconfirmed)
+				text_body[4] = text_body[4] % bch.btc(balance - unconfirmed)
 				if config['currency'] == '':
 					del(text_body[5])
 					del(text_body[3])
 					del(text_body[1])
 				else:
-					text_body[1] = text_body[1] % (config['currency'], fiat(balance * rate))
-					text_body[3] = text_body[3] % (config['currency'], fiat(unconfirmed * rate))
-					text_body[5] = text_body[5] % (config['currency'], fiat((balance - unconfirmed) * rate))
+					text_body[1] = text_body[1] % (config['currency'], bch.fiat(balance * rate))
+					text_body[3] = text_body[3] % (config['currency'], bch.fiat(unconfirmed * rate))
+					text_body[5] = text_body[5] % (config['currency'], bch.fiat((balance - unconfirmed) * rate))
 				message = MIMEText('\n'.join(text_body))
 				# Add headers
 				message['From'] = config['email_from']
@@ -243,7 +214,7 @@ while True:
 		addresses[addr] = balance
 		for line in lines:
 			if line.startswith('address=%s' % addr):
-				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, btc(balance))
+				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, bch.btc(balance))
 				break
 	# Write updates to the config file
 	f = open(cfg_file, 'w')
