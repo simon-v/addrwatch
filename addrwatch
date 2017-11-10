@@ -164,10 +164,10 @@ while True:
 				diff = bch.fiat((balance - addresses[addr]) * rate)
 			else:
 				diff = bch.btc(balance - addresses[addr])
-			if diff > 0:
-				report = 'Payment received: %s %s to address %s' % (diff, config['currency'], addr)
-			elif diff < 0:
+			if diff.startswith('-'):
 				report = 'Payment sent: %s %s from address %s' % (diff, config['currency'], addr)
+			else:
+				report = 'Payment received: %s %s to address %s' % (diff, config['currency'], addr)
 		# Report balance change
 		if report != '':
 			# Desktop notification
