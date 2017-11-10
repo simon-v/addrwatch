@@ -5,7 +5,7 @@ Addrwatch is a script that can be installed on your webserver or run from your p
 
 __How to Use?__
 
-Place the executable script in a convenient location. Be sure to copy `addrwatch.cfg.sample` to either `addrwatch.cfg` or `$HOME/.addrwatch.cfg` and edit it to your preferences.
+Place the executable script and library file in a convenient location. Be sure to copy `addrwatch.cfg.sample` to either `addrwatch.cfg` or `$HOME/.addrwatch.cfg` and edit it to your preferences.
 
 Start the script via your preferred method (direct execution, cron, systemd, your desktop environment's autostart capabilities etc.).
 
