@@ -140,7 +140,7 @@ while True:
 	elif loop_time >= rate_cache_time:
 		try:
 			rate = bch.get_price(config['currency'])
-			loop_count = 0
+			loop_time = 0
 		except KeyboardInterrupt:
 			sys.exit()
 		except:
