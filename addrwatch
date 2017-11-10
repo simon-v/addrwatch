@@ -125,7 +125,7 @@ if 'email_from' not in config.keys() or config['email_from'] == '':
 while True:
 	# Delay after the first pass
 	try:
-		data
+		balance
 	except NameError:
 		loop_time = rate_cache_time
 	else:
