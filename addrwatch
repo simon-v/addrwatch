@@ -121,6 +121,7 @@ while True:
 	try:
 		balance
 	except NameError:
+		balance = 0
 		loop_time = rate_cache_time
 	else:
 		loop_time += config['frequency']
@@ -139,6 +140,8 @@ while True:
 			sys.exit()
 		except:
 			print('Could not load conversion rate: %s' % sys.exc_info()[1])
+			if config['frequency'] == 0:
+				sys.exit(0)
 			continue
 	# Pull address balances from block explorer
 	for addr in addresses.keys():
@@ -148,6 +151,8 @@ while True:
 			sys.exit()
 		except:
 			print('Could not load address balance: %s' % sys.exc_info()[1])
+			if config['frequency'] == 0:
+				sys.exit(0)
 			continue
 		# Calculate balance change
 		if config['unconfirmed']:
