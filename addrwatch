@@ -4,15 +4,13 @@
 # This program is free software, released under the Apache License, Version 2.0. See the LICENSE file for more information
 # Consult the README file for usage instructions and other helpful hints
 
-import os, sys, subprocess, time, email, smtplib
-
-# Some web hosts are not very diligent in keeping up-to-date
-try:
-        from email.mime.text import MIMEText  # Python 2.7+
-except ImportError:
-        from email.MIMEText import MIMEText  # Python 2.4
+import os
+import sys
+import subprocess
+import time
 
 import bch # Local library file
+import sendmail # Local library file
 
 usage = '''Usage: addrwatch [CONFIG_FILE]
 See the README file for more information.'''
@@ -115,10 +113,6 @@ except:
 	config['unconfirmed'] = False
 if 'email' not in config:
 	config['email'] = ''
-use_smtp = True
-for setting in ['server', 'login', 'passwd']:
-	if setting not in config or config[setting] == '':
-		use_smtp = False
 if 'email_from' not in config.keys() or config['email_from'] == '':
 	config['email_from'] = email_from
 
@@ -187,28 +181,8 @@ while True:
 					text_body[1] = text_body[1] % (config['currency'], bch.fiat(balance * rate))
 					text_body[3] = text_body[3] % (config['currency'], bch.fiat(unconfirmed * rate))
 					text_body[5] = text_body[5] % (config['currency'], bch.fiat((balance - unconfirmed) * rate))
-				message = MIMEText('\n'.join(text_body))
-				# Add headers
-				message['From'] = config['email_from']
-				message['To'] = config['email']
-				message['Subject'] = report
-				message['Auto-Submitted'] = 'auto-generated'
-				if use_smtp:
-					try:
-						server = smtplib.SMTP(config['server'])
-						server.login(config['login'], config['passwd'])
-						server.sendmail(message['From'], message['To'], message.as_string())
-						server.quit()
-					except KeyboardInterrupt:
-						sys.exit()
-					except:
-						print('SMTP failed: %s' % sys.exc_info()[1])
-				else:
-					try:
-						server = subprocess.Popen(['/usr/sbin/sendmail','-i', message['To']], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-						server.communicate(message.as_string())
-					except:
-						print('Sendmail failed: %s' % sys.exc_info()[1])
+				# Send the email
+				sendmail.send(config, config['email'], report, '\n'.join(text_body))
 			print(report)
 		# Update balances
 		addresses[addr] = balance
