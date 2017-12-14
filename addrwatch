@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 # addrwatch - A Bitcoin Cash address watcher and notifier
 # Author: Simon Volpert <simon@simonvolpert.com>
+# Project page: https://github.com/simon-v/addrwatch/
 # This program is free software, released under the Apache License, Version 2.0. See the LICENSE file for more information
 # Consult the README file for usage instructions and other helpful hints
 
