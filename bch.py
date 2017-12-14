@@ -39,7 +39,7 @@ def jsonload(url):
 		data = json.load(webpage)
 		webpage.close()
 	except:
-		print('Error loading ' % url.split('/')[2])
+		print('Using %s as data source' % url.split('/')[2])
 		raise
 	return data
 
@@ -75,8 +75,7 @@ def get_balance(address):
 		# BlockChair requires special handling
 		balance = float(data['sum_value_unspent']) / 100000000
 	else:
-		print('Could not decode balance in API response from %s' % block_url.split('/')[2])
-		raise ValueError
+		raise ValueError('Could not figure out balance in API response from %s' % block_url.split('/')[2])
 	if 'unconfirmedBalance' in data:
 		unconfirmed = float(data['unconfirmedBalance'])
 	elif 'unconfirmed_received' in data:
