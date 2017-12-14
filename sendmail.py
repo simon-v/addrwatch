@@ -41,10 +41,13 @@ def send(config, to, subject, text_body, headers={}):
 			sys.exit()
 		except:
 			print('SMTP failed: %s' % sys.exc_info()[1])
+			return False
 	else:
 		try:
 			server = subprocess.Popen(['/usr/sbin/sendmail','-i', message['To']], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 			server.communicate(message.as_string())
 		except:
 			print('Sendmail failed: %s' % sys.exc_info()[1])
+			return False
 
+	return True
