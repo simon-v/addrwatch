@@ -68,7 +68,7 @@ def get_balance(address):
 	# Particular block explorer quirks
 	if 'balance' in data:
 		balance = float(data['balance'])
-		# BlockTrail requires special handling
+		# BTC.com/BlockTrail
 		if 'balanceSat' not in data:
 			balance /= 100000000
 	elif 'sum_value_unspent' in data:
@@ -79,7 +79,7 @@ def get_balance(address):
 	if 'unconfirmedBalance' in data:
 		unconfirmed = float(data['unconfirmedBalance'])
 	elif 'unconfirmed_received' in data:
-		# BTC.com has its own unconfirmed balance scheme
+		# BTC.com/BlockTrail
 		unconfirmed = float(data['unconfirmed_received']) / 100000000
 	else:
 		# Explorer.Cash does not provide the unconfirmed balance field; Getting it would require an extra query and some calculation
