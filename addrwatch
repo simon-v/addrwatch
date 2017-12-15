@@ -154,7 +154,7 @@ while True:
 			print('Could not load address balance: %s' % sys.exc_info()[1])
 			if config['frequency'] == 0:
 				sys.exit(0)
-			continue
+			break
 		# Calculate balance change
 		if config['unconfirmed']:
 			balance += unconfirmed
