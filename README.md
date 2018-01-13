@@ -17,5 +17,5 @@ This program is free software, released under the Apache License, Version 2.0. S
 
 The program's canonical project page resides at https://github.com/simon-v/addrwatch/
 
-I gratefully accept appreciation for my work in material form at [1LPrCxGHqhAGNqN1ViyKTVEedvoQrdwhQs](bitcoincash:1LPrCxGHqhAGNqN1ViyKTVEedvoQrdwhQs).
+I gratefully accept appreciation for my work in material form at __[bitcoincash:qq8vjvf946u8ghxklt792ugc48uejpfgpvzjhwajwt](bitcoincash:qq8vjvf946u8ghxklt792ugc48uejpfgpvzjhwajwt)__.
 
