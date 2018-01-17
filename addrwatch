@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # addrwatch - A Bitcoin Cash address watcher and notifier
 # Author: Simon Volpert <simon@simonvolpert.com>
 # Project page: https://github.com/simon-v/addrwatch/
@@ -147,11 +147,15 @@ while True:
 	# Pull address balances from block explorer
 	for addr in addresses.keys():
 		try:
-			balance, unconfirmed = bch.get_balance(addr)
+			balance, unconfirmed = bch.get_balance(addr, config=config, verify=False)
 		except KeyboardInterrupt:
 			sys.exit()
 		except:
-			print('Could not load address balance: %s' % sys.exc_info()[1])
+			exception = sys.exc_info()[1]
+			try:
+				print('Could not load address balance: %s' % sys.exc_info()[1].reason)
+			except AttributeError:
+				print('Could not load address balance: %s' % sys.exc_info()[1])
 			if config['frequency'] == 0:
 				sys.exit(0)
 			break
@@ -197,8 +201,7 @@ while True:
 				lines[lines.index(line)] = 'address=%s,%s\n' % (addr, bch.btc(balance))
 				break
 	# Write updates to the config file
-	f = open(cfg_file, 'w')
-	f.writelines(lines)
-	f.close()
+	with open(cfg_file, 'w') as f:
+		f.writelines(lines)
 	if config['frequency'] == 0:
 		sys.exit(0)
