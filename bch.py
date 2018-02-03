@@ -54,7 +54,7 @@ explorers = [
 		'confirmed_key': None,
 		'unconfirmed_key': 'unconfirmedBalance',
 		'unit_satoshi': False,
-		'prefixes': 'CH',
+		'prefixes': 'qp',
 	},
 	{
 		# Non-realtime source; https://github.com/Blockchair/Blockchair.Support/blob/master/API.md
@@ -98,24 +98,28 @@ import urllib.request
 import json
 import random
 import sys
+#optional import pycoin.key
+#optional import cashaddr # Local library file
 
 # Initialize explorer and exchange list
 random.seed()
 random.shuffle(explorers)
 for i in range(len(explorers)):
 	explorers[i]['errors'] = 0
-	explorers[i]['name'] = explorers[i]['url'].split('/')[2]
+	explorers[i]['name'] = '.'.join(explorers[i]['url'].split('/')[2].split('.')[-2:])
 for i in range(len(exchanges)):
-	exchanges[i]['name'] = exchanges[i]['url'].split('/')[2]
+	exchanges[i]['name'] = '.'.join(exchanges[i]['url'].split('/')[2].split('.')[-2:])
+del(i) # Cleanup for help(bch)
 
-# float amount -> str formatted amount
 def btc(amount):
+	'''Return a native bitcoin amount representation'''
 	result = ('%.8f' % amount).rstrip('0.')
 	if result == '':
 		return '0'
 	return result
 
 def bits(amount):
+	'''Return the amount represented in bits/cash'''
 	bit, sat = fiat(amount * 1000000).split('.')
 	sat = sat.rstrip('0')
 	if sat == '':
@@ -123,18 +127,21 @@ def bits(amount):
 	return(bit + '.' + sat)
 
 def fiat(amount):
+	'''Return the amount represented in a dollar/cent notation'''
 	return ('%.2f' % amount)
 
-# str URL -> str JSON data from the URL
 def jsonload(url):
+	'''Load a web page and return the resulting JSON object'''
 	request = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
 	with urllib.request.urlopen(request) as webpage:
 		data = str(webpage.read(), 'UTF-8')
 		data = json.loads(data)
 	return data
 
-# Return the value at the end of the key hierarchy in the json object
 def get_value(json_object, key_path):
+	'''Get the value at the end of a dot-separated key path'''
+	# Workaround for explorers that return "null" for unused addresses
+	error = bool(json_object['err_no']) if 'err_no' in json_object else False
 	for k in key_path.split('.'):
 		# Process integer indices
 		try:
@@ -146,10 +153,14 @@ def get_value(json_object, key_path):
 			json_object = json_object[k]
 		except KeyError:
 			raise KeyError('Key "{k}" from "{key_path}" not found in JSON'.format(k=k, key_path=key_path))
+		except TypeError:
+			if not error:
+				return 0
+			raise
 	return json_object
 
-# Get the conversion rate
 def get_price(currency, config={'price_source': exchanges[0]['name']}):
+	'''Get the current Bitcoin Cash price in the desired currency'''
 	found = False
 	for server in exchanges:
 		if server['name'] == config['price_source']:
@@ -166,21 +177,39 @@ def get_price(currency, config={'price_source': exchanges[0]['name']}):
 		raise KeyError('{src} does not provide {cur} exchange rate'.format(src=server['name'], cur=currency))
 	return rate
 
-# Get the address balance
 def get_balance(address, config={}, verify=False):
-	if address.startswith('b'):
+	'''Get the current balance of an address from a block explorer
+Returns tuple(confirmed_balance, unconfirmed_balance)
+
+Keyword arguments:
+address    (str) bitcoin_address or tuple(str xpub, int index)
+config     (dict) custom explorer configuration, like the ones in "explorers":
+           {
+               "custom_explorer_url": str, "{address}" means address to look up
+               "custom_balance_key": str or None
+               "custom_confirmed_key": str or None
+               "custom_unconfirmed_key": str or None
+               "custom_unit_satoshi": bool
+           }
+verify     (bool) the results should be verified with another explorer'''
+	# Generated address request
+	xpub = None
+	if type(address) is tuple:
+		xpub, idx = address
+	# Strip prefix
+	elif address.startswith('b'):
 		address = address.split(':')[1]
 	confirmed_only = True if 'unconfirmed' not in config else not config['unconfirmed']
 	# If the passed config defines a custom explorer, use that instead
 	try:
 		custom_explorer = {
-			'name': config['custom_explorer_url'].split('/')[2],
+			'name': '.'.join(config['custom_explorer_url'].split('/')[2].split('.')[-2:]),
 			'url': config['custom_explorer_url'],
 			'balance_key': config['custom_balance_key'],
 			'confirmed_key': config['custom_confirmed_key'],
 			'unconfirmed_key': config['custom_unconfirmed_key'],
 			'unit_satoshi': config['custom_unit_satoshi'],
-			'prefixes': 'qp13CH', # Accept all prefixes by default
+			'prefixes': 'qp13', # Accept all prefixes by default
 			'errors': 0
 		}
 	except KeyError:
@@ -203,12 +232,19 @@ def get_balance(address, config={}, verify=False):
 			if results == []:
 				raise ConnectionError('Connection errors when trying to fetch balance')
 			return(results[-1])
-		# Wrong address type
-		if address[0] not in server['prefixes']:
-			continue
 		# Avoid servers with excessive errors
 		if server['errors'] > MAX_ERRORS:
 			continue
+		#print(server['name']) # DEBUG
+		# Wrong address type
+		if xpub is None and address[0] not in server['prefixes']:
+			continue
+		# Generate address if necessary
+		if xpub is not None:
+			if 'q' in server['prefixes'] or 'p' in server['prefixes']:
+				address = generate_address(xpub, idx)
+			else:
+				address = generate_address(xpub, idx, False)
 		# Try to get balance
 		try:
 			# Conditional balance processing
@@ -267,6 +303,16 @@ def get_balance(address, config={}, verify=False):
 	explorers.append(server)
 	explorers.remove(None)
 	return confirmed, unconfirmed
+
+def generate_address(xpub, idx, cash=True):
+	'''Generate a bitcoin cash or bitcoin legacy address from the extended public key at the given index'''
+	# Optional dependencies if unused
+	import pycoin.key
+	import cashaddr
+	subkey = pycoin.key.Key.from_text(xpub).subkey(0).subkey(idx)
+	if cash:
+		return cashaddr.encode('bitcoincash', 0, subkey.hash160())
+	return subkey.address()
 
 if __name__ == '__main__':
 	print('===== Known block explorers =====')
