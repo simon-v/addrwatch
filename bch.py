@@ -3,8 +3,14 @@
 # Author: Simon Volpert <simon@simonvolpert.com>
 # This program is free software, released under the Apache License, Version 2.0. See the LICENSE file for more information
 
+import urllib.request
+import json
+import random
+import sys
+#optional import pycoin.key
+#optional import cashaddr # Local library file
+
 MAX_ERRORS = 10
-currency_url = 'http://api.fixer.io/latest?base=USD&symbols={cur}'
 exchanges = [
 	{
 		'url': 'https://api.coinmarketcap.com/v1/ticker/bitcoin-cash/?convert={cur}',
@@ -13,37 +19,38 @@ exchanges = [
 	{
 		'url': 'https://api.coinbase.com/v2/exchange-rates?currency=BCH',
 		'price_key': 'data.rates.{cur}',
-	}
+	},
+	{
+		'url': 'https://apiv2.bitcoinaverage.com/indices/global/ticker/short?crypto=BCH&fiat={cur}',
+		'price_key': 'BCH{cur}.last',
+	},
+	{
+		# Extremely limited ticker set
+		'url': 'https://api.kraken.com/0/public/Ticker?pair=BCH{cur}',
+		'price_key': 'result.BCH{cur}.c.0',
+	},
 ]
 explorers = [
 	{
 		'url': 'https://cashexplorer.bitcoin.com/api/addr/{address}',
-		'balance_key': 'balance',
-		'confirmed_key': None,
-		'unconfirmed_key': 'unconfirmedBalance',
-		'unit_satoshi': False,
-		'prefixes': '13',
-	},
-	{
-		'url': 'https://blockdozer.com/insight-api/addr/{address}',
-		'balance_key': 'balance',
-		'confirmed_key': None,
+		'balance_key': None,
+		'confirmed_key': 'balance',
 		'unconfirmed_key': 'unconfirmedBalance',
 		'unit_satoshi': False,
 		'prefixes': '13',
 	},
 	{
 		'url': 'https://blockdozer.com/insight-api/addr/bitcoincash:{address}',
-		'balance_key': 'balance',
-		'confirmed_key': None,
+		'balance_key': None,
+		'confirmed_key': 'balance',
 		'unconfirmed_key': 'unconfirmedBalance',
 		'unit_satoshi': False,
 		'prefixes': 'qp',
 	},
 	{
 		'url': 'https://bccblock.info/api/addr/{address}',
-		'balance_key': 'balance',
-		'confirmed_key': None,
+		'balance_key': None,
+		'confirmed_key': 'balance',
 		'unconfirmed_key': 'unconfirmedBalance',
 		'unit_satoshi': False,
 		'prefixes': '13',
@@ -75,16 +82,16 @@ explorers = [
 	},
 	{
 		'url': 'https://bch-bitcore2.trezor.io/api/addr/{address}',
-		'balance_key': 'balance',
-		'confirmed_key': None,
+		'balance_key': None,
+		'confirmed_key': 'balance',
 		'unconfirmed_key': 'unconfirmedBalance',
 		'unit_satoshi': False,
 		'prefixes': '13',
 	},
 	{
 		'url': 'https://bitcoincash.blockexplorer.com/api/addr/{address}',
-		'balance_key': 'balance',
-		'confirmed_key': None,
+		'balance_key': None,
+		'confirmed_key': 'balance',
 		'unconfirmed_key': 'unconfirmedBalance',
 		'unit_satoshi': False,
 		'prefixes': '13',
@@ -93,19 +100,10 @@ explorers = [
 #	'https://api.blocktrail.com/v1/bcc/address/%s?api_key=MY_APIKEY', # API key required
 ]
 
-
-import urllib.request
-import json
-import random
-import sys
-#optional import pycoin.key
-#optional import cashaddr # Local library file
-
 # Initialize explorer and exchange list
 random.seed()
 random.shuffle(explorers)
 for i in range(len(explorers)):
-	explorers[i]['errors'] = 0
 	explorers[i]['name'] = '.'.join(explorers[i]['url'].split('/')[2].split('.')[-2:])
 for i in range(len(exchanges)):
 	exchanges[i]['name'] = '.'.join(exchanges[i]['url'].split('/')[2].split('.')[-2:])
@@ -159,64 +157,40 @@ def get_value(json_object, key_path):
 			raise
 	return json_object
 
-def get_price(currency, config={'price_source': exchanges[0]['name']}):
+def get_price(currency, exchange=exchanges[0]['name']):
 	'''Get the current Bitcoin Cash price in the desired currency'''
 	found = False
 	for server in exchanges:
-		if server['name'] == config['price_source']:
+		if server['name'] == exchange:
 			found = True
 			break
 	if not found:
 		raise KeyError('{src} is not in list of exchanges'.format(src=config['price_source']))
-	try:
-		data = jsonload(server['url'].format(cur=currency, cur_lower=currency.lower()))
-	except KeyboardInterrupt:
-		raise
+	data = jsonload(server['url'].format(cur=currency, cur_lower=currency.lower()))
 	rate = float(get_value(data, server['price_key'].format(cur=currency, cur_lower=currency.lower())))
 	if rate == 0.0:
-		raise KeyError('{src} does not provide {cur} exchange rate'.format(src=server['name'], cur=currency))
-	return rate
+		raise ValueError('Returned exchange rate is zero')
+	return round(rate, 2)
 
-def get_balance(address, config={}, verify=False):
+def get_balance(address, explorer=None, verify=False, confirmed_only=False):
 	'''Get the current balance of an address from a block explorer
 Returns tuple(confirmed_balance, unconfirmed_balance)
 
 Keyword arguments:
-address    (str) bitcoin_address or tuple(str xpub, int index)
-config     (dict) custom explorer configuration, like the ones in "explorers":
-           {
-               "custom_explorer_url": str, "{address}" means address to look up
-               "custom_balance_key": str or None
-               "custom_confirmed_key": str or None
-               "custom_unconfirmed_key": str or None
-               "custom_unit_satoshi": bool
-           }
-verify     (bool) the results should be verified with another explorer'''
+address         (str) bitcoin_address or tuple(str xpub, int index)
+explorer        (str) the name of a specific explorer to query
+verify          (bool) the results should be verified with another explorer
+confirmed_only  (bool) ignore servers without a separate unconfirmed balance'''
 	# Generated address request
 	xpub = None
 	if type(address) is tuple:
 		xpub, idx = address
 	# Strip prefix
-	elif address.startswith('b'):
+	elif address[0].lower() == 'b':
 		address = address.split(':')[1]
-	confirmed_only = True if 'unconfirmed' not in config else not config['unconfirmed']
-	# If the passed config defines a custom explorer, use that instead
-	try:
-		custom_explorer = {
-			'name': '.'.join(config['custom_explorer_url'].split('/')[2].split('.')[-2:]),
-			'url': config['custom_explorer_url'],
-			'balance_key': config['custom_balance_key'],
-			'confirmed_key': config['custom_confirmed_key'],
-			'unconfirmed_key': config['custom_unconfirmed_key'],
-			'unit_satoshi': config['custom_unit_satoshi'],
-			'prefixes': 'qp13', # Accept all prefixes by default
-			'errors': 0
-		}
-	except KeyError:
-		pass
-	else:
-		explorers.clear()
-		explorers.append(custom_explorer)
+	# Normalize case
+	if address[0] in 'QP':
+		address = address.lower()
 	# Add a temporary separator
 	server = None
 	results = []
@@ -224,21 +198,30 @@ verify     (bool) the results should be verified with another explorer'''
 		# Cycle to the next server
 		explorers.append(server)
 		server = explorers.pop(0)
+		# Populate server error count if necessary
+		if server is not None and 'errors' not in server:
+			server['errors'] = 0
 		# If the end of the server list was reached without a single success, assume a network error
 		if server is None:
 			for i in range(len(explorers)):
 				if explorers[i]['errors'] > 0:
 					explorers[i]['errors'] -= 1
 			if results == []:
-				raise ConnectionError('Connection errors when trying to fetch balance')
+				raise ConnectionError('Connection error')
 			return(results[-1])
+		# Select only the desired server if requested
+		if explorer is not None and server['name'] != explorer:
+			continue
 		# Avoid servers with excessive errors
 		if server['errors'] > MAX_ERRORS:
 			continue
 		#print(server['name']) # DEBUG
-		# Wrong address type
+		# Convert wrong address type
 		if xpub is None and address[0] not in server['prefixes']:
-			continue
+			try:
+				address = convert_address(address)
+			except ImportError:
+				continue
 		# Generate address if necessary
 		if xpub is not None:
 			if 'q' in server['prefixes'] or 'p' in server['prefixes']:
@@ -314,6 +297,41 @@ def generate_address(xpub, idx, cash=True):
 		return cashaddr.encode('bitcoincash', 0, subkey.hash160())
 	return subkey.address()
 
+def validate_key(key):
+	'''Check the validity of a key or an address'''
+	# Optional dependencies if unused
+	import pycoin.key
+	import cashaddr
+	if ':' in key:
+		key = key.split(':')[1]
+	if key[0] in '13x':
+		try:
+			pycoin.key.Key.from_text(key)
+		except pycoin.encoding.EncodingError:
+			return False
+	elif key[0] in 'qpQP':
+		try:
+			subkey = cashaddr.decode('bitcoincash:' + key.lower())
+		except ValueError:
+			return False
+	else:
+		return False
+	return True
+
+def convert_address(address):
+	'''Convert an address back and forth between cash and legacy formats'''
+	# Optional dependencies if unused
+	import pycoin.key
+	import cashaddr
+	if address[0] in '13':
+		subkey = pycoin.key.Key.from_text(address)
+		return cashaddr.encode('bitcoincash', 0, subkey.hash160())
+	elif address[0] in 'qpQP':
+		subkey = cashaddr.decode('bitcoincash:' + address.lower())[2]
+		return pycoin.key.Key(hash160=subkey).address()
+	else:
+		raise ValueError('Unsupported address format')
+
 if __name__ == '__main__':
 	print('===== Known block explorers =====')
 	for server in explorers:
@@ -327,8 +345,10 @@ if __name__ == '__main__':
 		support = True
 		try:
 			get_price(cur, config={'price_source': server['name']})
-		except KeyError:
-			print(sys.exc_info()[1])
+		except (KeyError, ValueError, urllib.error.HTTPError):
+			print('{src} does not provide {cur} exchange rate: {err}'.format(src=server['name'], cur=cur, err=sys.exc_info()[1]))
 			support = False
+		except KeyboardInterrupt:
+			sys.exit()
 		if support:
 			print(server['name'])
