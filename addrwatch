@@ -147,7 +147,7 @@ while True:
 	# Pull address balances from block explorer
 	for addr in addresses.keys():
 		try:
-			balance, unconfirmed = bch.get_balance(addr, config=config, verify=False)
+			balance, unconfirmed = bch.get_balance(addr)
 		except KeyboardInterrupt:
 			sys.exit()
 		except:
