@@ -153,9 +153,9 @@ while True:
 		except:
 			exception = sys.exc_info()[1]
 			try:
-				print('Could not load address balance: %s' % sys.exc_info()[1].reason)
+				print('Could not load address balance: %s' % exception.reason)
 			except AttributeError:
-				print('Could not load address balance: %s' % sys.exc_info()[1])
+				print('Could not load address balance: %s' % exception)
 			if config['frequency'] == 0:
 				sys.exit(0)
 			break
