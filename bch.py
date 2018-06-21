@@ -8,10 +8,12 @@ import json
 import random
 import sys
 import datetime
+import logging
 #optional import pycoin.key
 #optional import cashaddr # Local library file
 
 MAX_ERRORS = 10
+TIMEOUT = 5
 exchanges = [
 	{
 		'url': 'https://api.coinmarketcap.com/v1/ticker/bitcoin-cash/?convert={cur}',
@@ -53,12 +55,12 @@ explorers = [
 		'prefixes': '13',
 	},
 	{
-		'url': 'https://blockdozer.com/insight-api/addr/bitcoincash:{address}',
-		'tx_url': 'https://blockdozer.com/insight-api/tx/{txid}',
+		'url': 'https://blockdozer.com/api/addr/bitcoincash:{address}',
+		'tx_url': 'https://blockdozer.com/api/tx/{txid}',
 		'balance_key': None,
 		'confirmed_key': 'balance',
 		'unconfirmed_key': 'unconfirmedBalance',
-		'last_tx_key': 'transactions.0',
+		'last_tx_key': 'transactions.-1',
 		'tx_time_key': 'time',
 		'tx_inputs_key': 'vin',
 		'tx_in_double_spend_key': 'doubleSpentTxID',
@@ -70,27 +72,7 @@ explorers = [
 		'tx_size_key': 'size',
 		'tx_confirmations_key': 'confirmations',
 		'unit_satoshi': False,
-		'prefixes': 'qp',
-	},
-	{
-		'url': 'https://bccblock.info/api/addr/{address}',
-		'tx_url': 'https://bccblock.info/api/tx/{txid}',
-		'balance_key': None,
-		'confirmed_key': 'balance',
-		'unconfirmed_key': 'unconfirmedBalance',
-		'last_tx_key': 'transactions.0',
-		'tx_time_key': 'time',
-		'tx_inputs_key': 'vin',
-		'tx_in_double_spend_key': 'doubleSpentTxID',
-		'tx_outputs_key': 'vout',
-		'tx_out_value_key': 'value',
-		'tx_out_address_key': 'scriptPubKey.addresses.0',
-		'tx_double_spend_key': None,
-		'tx_fee_key': 'fees',
-		'tx_size_key': 'size',
-		'tx_confirmations_key': 'confirmations',
-		'unit_satoshi': False,
-		'prefixes': '13',
+		'prefixes': 'qp13',
 	},
 	{
 		'url': 'https://bch-insight.bitpay.com/api/addr/{address}',
@@ -152,6 +134,26 @@ explorers = [
 		'unit_satoshi': False,
 		'prefixes': '13',
 	},
+	{
+		'url': 'https://rest.bitbox.earth/v1/address/details/{address}',
+		'tx_url': 'https://rest.bitbox.earth/v1/transaction/details/{txid}',
+		'balance_key': None,
+		'confirmed_key': 'balance',
+		'unconfirmed_key': 'unconfirmedBalance',
+		'last_tx_key': 'transactions.0',
+		'tx_time_key': 'time',
+		'tx_inputs_key': 'vin',
+		'tx_in_double_spend_key': 'doubleSpentTxID',
+		'tx_outputs_key': 'vout',
+		'tx_out_value_key': 'value',
+		'tx_out_address_key': 'scriptPubKey.addresses.0',
+		'tx_double_spend_key': None,
+		'tx_fee_key': 'fees',
+		'tx_size_key': 'size',
+		'tx_confirmations_key': 'confirmations',
+		'unit_satoshi': False,
+		'prefixes': 'qp13',
+	},
 ]
 
 # Initialize explorer and exchange list
@@ -188,7 +190,7 @@ def fiat(amount):
 def jsonload(url):
 	'''Load a web page and return the resulting JSON object'''
 	request = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-	with urllib.request.urlopen(request) as webpage:
+	with urllib.request.urlopen(request, timeout=TIMEOUT) as webpage:
 		data = str(webpage.read(), 'UTF-8')
 		data = json.loads(data)
 	return data
@@ -233,7 +235,7 @@ def get_price(currency, exchange=exchanges[0]['name']):
 	return round(rate, 2)
 
 
-def pick_explorer(server_name=None, address_prefix=None):
+def pick_explorer(server_name=None, address_prefix=None, ignore_errors=False):
 	'''Advance the list of explorers until one that matches the requirements is found'''
 	for __ in explorers:
 		# Cycle to the next server
@@ -243,6 +245,7 @@ def pick_explorer(server_name=None, address_prefix=None):
 		explorers.append(server)
 		# Populate server error count if necessary
 		if 'errors' not in server:
+			logging.debug('Adding control fields to {} definition'.format(server['name']))
 			server['errors'] = 0
 			server['last_error'] = None
 			server['last_data'] = None
@@ -250,10 +253,12 @@ def pick_explorer(server_name=None, address_prefix=None):
 		if server_name is not None and server['name'] != server_name:
 			continue
 		# Filter by error rate
-		if server['errors'] > MAX_ERRORS and server['name'] != server_name:
+		if not ignore_errors and server['errors'] > MAX_ERRORS:
+			logging.debug('Skipping {} based on error rates'.format(server['name']))
 			continue
 		# Filter by address prefix
 		if address_prefix is not None and address_prefix not in server['prefixes']:
+			logging.debug('Skipping {} due to unsupported address prefix'.format(server['name']))
 			continue
 		return server
 	raise KeyError('No servers match the requirements')
@@ -269,11 +274,12 @@ confirmed       (float) the confirmed balance of the address
 unconfirmed     (float) the unconfirmed balance of the address
 '''
 
-	def __init__(self, address, explorer=None, verify=False):
+	def __init__(self, address, explorer=None, verify=False, ignore_errors=False):
 		'''Keyword arguments:
 address         (str) bitcoin_address or tuple(str xpub, int index)
 explorer        (str) the name of a specific explorer to query
 verify          (bool) the results should be verified with another explorer
+ignore_errors   (str) don't skip explorers disabled for excessive errors
 '''
 		# Incompatible parameters
 		if verify and explorer is not None:
@@ -320,12 +326,13 @@ verify          (bool) the results should be verified with another explorer
 		while explorers[0] is not None:
 			# Query the next explorer
 			if prefixes == 'qp13':
-				server = pick_explorer(explorer)
+				server = pick_explorer(explorer, ignore_errors=ignore_errors)
 			else:
-				server = pick_explorer(explorer, address_prefix=prefixes[0])
+				server = pick_explorer(explorer, address_prefix=prefixes[0], ignore_erros=ignore_errors)
 			# Try to get balance
 			try:
 				# Get and cache the received data for possible future analysis
+				logging.debug('Querying {}'.format(server['name']))
 				if 'q' in server['prefixes']:
 					json = jsonload(server['url'].format(address=self.address))
 				else:
@@ -364,7 +371,7 @@ verify          (bool) the results should be verified with another explorer
 				except AttributeError:
 					server['last_error'] = str(exception)
 				if server['errors'] > MAX_ERRORS:
-					print('Excessive errors from {server}, disabling. Last error: {error}'.format(server=server['name'], error=server['last_error']))
+					logging.error('Excessive errors from {server}, disabling. Last error: {error}'.format(server=server['name'], error=server['last_error']))
 				continue
 			# Convert balances to native units
 			if server['unit_satoshi']:
@@ -390,21 +397,21 @@ verify          (bool) the results should be verified with another explorer
 		self.confirmed, self.unconfirmed, self.last_txid = results[-1]
 
 
-def get_balance(address, explorer=None, verify=False):
+def get_balance(address, explorer=None, verify=False, ignore_errors=False):
 	'''Get the current balance of an address from a block explorer
 Takes the same arguments as AddressInfo()
 Returns tuple(confirmed_balance, unconfirmed_balance)
 '''
-	addr = AddressInfo(address, explorer, verify)
+	addr = AddressInfo(address, explorer, verify, ignore_errors)
 	return addr.confirmed, addr.unconfirmed
 
 
-def get_last_txid(address, explorer=None, verify=False):
+def get_last_txid(address, explorer=None, verify=False, ignore_errors=False):
 	'''Get the last tx associated with an address
 Takes the same arguments as AddressInfo()
 Returns str(txid)
 '''
-	addr = AddressInfo(address, explorer, verify)
+	addr = AddressInfo(address, explorer, verify, ignore_errors)
 	return addr.last_txid
 
 
@@ -426,11 +433,12 @@ confirmations (int) the number of confirmations this transaction has
 Will raise TxNotFoundError if the passed txid is not known to any explorer
 '''
 
-	def __init__(self, txid, explorer=None):
+	def __init__(self, txid, explorer=None, ignore_errors=None):
 		'''Keyword arguments:
 
-txid         (str) the txid to look for
-explorer     (str) the name of a specific explorer to query
+txid          (str) the txid to look for
+explorer      (str) the name of a specific explorer to query
+ignore_errors (str) don't skip explorers disabled for excessive errors
 '''
 		# Add a temporary separator
 		explorers.append(None)
@@ -438,11 +446,12 @@ explorer     (str) the name of a specific explorer to query
 		while explorers[0] is not None:
 			# Query the next explorer
 			try:
-				server = pick_explorer(explorer)
+				server = pick_explorer(explorer, ignore_errors=ignore_errors)
 			except StopIteration:
 				break
 			try:
 				# Get and cache the received data for possible future analysis
+				logging.debug('Querying {}'.format(server['name']))
 				json = jsonload(server['tx_url'].format(txid=txid))
 				server['last_data'] = json
 				# Figure out if the tx is a double spend
@@ -452,8 +461,13 @@ explorer     (str) the name of a specific explorer to query
 					self.double_spend = False
 					for i, __ in enumerate(get_value(json, server['tx_inputs_key'])):
 						#tx_size += 148
-						if get_value(json, '.'.join([server['tx_inputs_key'], str(i), server['tx_in_double_spend_key']])) is not None:
-							self.double_spend = True
+						try:
+							if get_value(json, '.'.join([server['tx_inputs_key'], str(i), server['tx_in_double_spend_key']])) is not None:
+								self.double_spend = True
+						# Workaround for explorers that don't provide empty double spend keys
+						except KeyError as k:
+							if str(k).strip('\'') != server['tx_in_double_spend_key']:
+								raise
 				# Assemble list of output values
 				self.outputs = {}
 				for i, __ in enumerate(get_value(json, server['tx_outputs_key'])):
@@ -462,6 +476,8 @@ explorer     (str) the name of a specific explorer to query
 					value = float(get_value(json, '.'.join([server['tx_outputs_key'], str(i), server['tx_out_value_key']])))
 					if server['unit_satoshi']:
 						value /= 100000000
+					if addr[0] in 'bB':
+						addr = addr.lower().split(':')[1]
 					self.outputs[addr] = value
 					# Provide both address formats if possible
 					try:
@@ -491,7 +507,7 @@ explorer     (str) the name of a specific explorer to query
 				except AttributeError:
 					server['last_error'] = str(exception)
 				if server['errors'] > MAX_ERRORS:
-					print('Excessive errors from {server}, disabling. Last error: {error}'.format(server=server['name'], error=server['last_error']))
+					logging.error('Excessive errors from {server}, disabling. Last error: {error}'.format(server=server['name'], error=server['last_error']))
 				continue
 		try:
 			explorers.remove(None)
@@ -501,7 +517,7 @@ explorer     (str) the name of a specific explorer to query
 			raise TxNotFoundError('No results from any known block explorer')
 
 
-def get_tx_propagation(txid, threshold=100, callback=None, stop_on_double_spend=False):
+def get_tx_propagation(txid, threshold=100, callback=None, stop_on_double_spend=False, ignore_errors=False):
 	'''Estimate a transaction's propagation across the Bitcoin Cash network
 Returns a tuple consisting of:
   * The percentage of explorers that are aware of the txid;
@@ -517,9 +533,14 @@ stop_on_double_spend
 '''
 	sightings = 0
 	double_spend = False
+	num_servers = len(explorers)
+	propagation = 0
 	for server in explorers.copy():
+		if not ignore_errors and 'errors' in server and server['errors'] > MAX_ERRORS:
+			num_servers -= 1
+			continue
 		try:
-			tx = TxInfo(txid, explorer=server['name'])
+			tx = TxInfo(txid, explorer=server['name'], ignore_errors=ignore_errors)
 		except TxNotFoundError:
 			continue
 		except KeyboardInterrupt:
@@ -530,17 +551,17 @@ stop_on_double_spend
 				error = exception.reason
 			except AttributeError:
 				error = exception
-			print('Could not fetch explorer data: {}'.format(error))
+			logging.error('Could not fetch explorer data: {}'.format(error))
 			continue
 		if tx.double_spend:
 			double_spend = True
 		sightings += 1
-		propagation = 100 * sightings / len(explorers)
+		propagation = 100 * sightings / num_servers
 		if callback is not None:
 			callback(propagation, double_spend)
 		if propagation >= threshold:
 			break
-		elif stop_on_double_spend:
+		elif double_spend and stop_on_double_spend:
 			break
 	return propagation, double_spend
 
@@ -583,6 +604,8 @@ def convert_address(address):
 	# Optional dependencies if unused
 	import pycoin.key
 	import cashaddr
+	if address[0] in 'bB':
+		address = address.split(':')[1]
 	if address[0] in '13':
 		subkey = pycoin.key.Key.from_text(address)
 		return cashaddr.encode('bitcoincash', 0, subkey.hash160())
