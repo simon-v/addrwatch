@@ -16,7 +16,7 @@ MAX_ERRORS = 10
 TIMEOUT = 5
 exchanges = [
 	{
-		'url': 'https://api.coinmarketcap.com/v1/ticker/bitcoin-cash/?convert={cur}',
+		'url': 'https://api.coinmarketcap.com/v2/ticker/1831/?convert={cur}',
 		'price_key': '0.price_{cur_lower}',
 	},
 	{
@@ -55,7 +55,7 @@ explorers = [
 		'prefixes': '13',
 	},
 	{
-		'url': 'https://blockdozer.com/api/addr/bitcoincash:{address}',
+		'url': 'https://blockdozer.com/api/addr/{address}',
 		'tx_url': 'https://blockdozer.com/api/tx/{txid}',
 		'balance_key': None,
 		'confirmed_key': 'balance',
@@ -328,7 +328,7 @@ ignore_errors   (str) don't skip explorers disabled for excessive errors
 			if prefixes == 'qp13':
 				server = pick_explorer(explorer, ignore_errors=ignore_errors)
 			else:
-				server = pick_explorer(explorer, address_prefix=prefixes[0], ignore_erros=ignore_errors)
+				server = pick_explorer(explorer, address_prefix=prefixes[0], ignore_errors=ignore_errors)
 			# Try to get balance
 			try:
 				# Get and cache the received data for possible future analysis
