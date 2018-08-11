@@ -15,7 +15,7 @@ If running `addrwatch` via systemd, be sure to edit `addrwatch.service` as well 
 
 This program is free software, released under the Apache License, Version 2.0. See the LICENSE file for more information.
 
-The program's canonical project page resides at https://github.com/simon-v/addrwatch/
+The program's canonical project page resides at https://simonvolpert.com/addrwatch/
 
 I gratefully accept appreciation for my work in material form at __[bitcoincash:qq8vjvf946u8ghxklt792ugc48uejpfgpvzjhwajwt](bitcoincash:qq8vjvf946u8ghxklt792ugc48uejpfgpvzjhwajwt)__.
 
